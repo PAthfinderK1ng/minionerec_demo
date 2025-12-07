@@ -35,10 +35,20 @@ class Tokenizer:
         return self.tokenizer.decode(t)
 
 class BaseDataset(Dataset):
-    def __init__(self):
+    def __init__(self, tokenizer=None, max_len=2048, test=False, category="", dedup=False, seed=None):
         super().__init__()
         self.data = None
         self.inputs = None
+        
+        if tokenizer is not None:
+            self.tokenizer = Tokenizer(tokenizer)
+        if seed is not None:
+            random.seed(seed)
+        
+        self.test = test
+        self.max_len = max_len
+        self.category = category
+        self.dedup = dedup
 
     def __len__(self):
         return len(self.data)
@@ -65,22 +75,40 @@ class BaseDataset(Dataset):
         raise NotImplementedError(None)
 
     def get_history(self, row):
-        raise NotImplementedError(None)
+        raise {}
+       
+    def generate_prompt(self, data_point):
+        return f"""### User Input: 
+{data_point["input"]}
+
+### Response:\n{data_point["output"]}"""
 
 
-class SFTData(BaseDataset):
-    def __init__(self, train_file, tokenizer, max_len=2048, sample=-1, test = False, seed=0, category="", K=4, dedup=False):
+class CSVBaseDataset(BaseDataset):    
+    def __init__(self, train_file, sample=-1, seed=0, max_len=2048, category="", dedup=False, tokenizer=None, test=False):
+        super().__init__(tokenizer, max_len, test, category, dedup, seed)
+
         self.data = pd.read_csv(train_file)
-        random.seed(seed)
         
         if sample > 0:
             self.data = self.data.sample(sample, random_state=seed)
-        self.tokenizer = Tokenizer(tokenizer)
-        self.test = test
-        self.max_len = max_len
-        self.category = category
-        # self.K = K
-        self.dedup = dedup
+
+
+class JSONBaseDataset(BaseDataset):
+    def __init__(self, item_file=None, index_file=None, tokenizer=None, max_len=2048, test=False, category="", dedup=False, seed=None):
+        super().__init__(tokenizer, max_len, test, category, dedup, seed)
+        
+        # Load item features and indices if files are provided
+        with open(item_file, 'r') as f:
+            self.item_feat = json.load(f)
+        with open(index_file, 'r') as f:
+            self.indices = json.load(f)
+
+
+class SFTData(CSVBaseDataset):
+    def __init__(self, train_file, tokenizer, max_len=2048, sample=-1, test = False, seed=0, category="", K=4, dedup=False):
+        super().__init__(train_file, sample, seed, max_len, category, dedup, tokenizer, test)
+
         self.instructs = [
         f"Given a list of {category} the user recetenly enjoy, please write a new {category} that the user may bought",
         f"Considering the {category} that has recently captured the user's interest, kindly create a compilation of other {category} that the user might have played prior to this.",
@@ -103,14 +131,6 @@ class SFTData(BaseDataset):
 
 ### Response:\n{data_point["output"]}
 """
-    
-    def generate_prompt(self, data_point):
-        return f"""### User Input: 
-{data_point["input"]}
-
-### Response:\n{data_point["output"]}"""
-
-
 
     def get_history(self, row):
         row['history_item_title'] = eval(row['history_item_title'])
@@ -179,15 +199,10 @@ class SFTData(BaseDataset):
         }
 
 
-class D3Dataset(BaseDataset):
+class D3Dataset(CSVBaseDataset):
     def __init__(self, train_file, max_len=2048, sample=-1, seed=0, category="", dedup=False):
-        self.data = pd.read_csv(train_file)
-        random.seed(seed)
-        
-        if sample > 0:
-            self.data = self.data.sample(sample, random_state=seed)
-        self.category = category
-        self.dedup = dedup
+        super().__init__(train_file, sample, seed, max_len, category, dedup, tokenizer=None, test=False)
+
         self.prompt2history = {}
         self.history2target = {}
         self.instructs = [
@@ -204,13 +219,6 @@ class D3Dataset(BaseDataset):
         f"In relation to the user's recent entertainment with a given {category}, it would be appreciated if you could curate a list of {category} that might form part of the user's previous gaming history."
         ]
         self.get_inputs()
-
-    def generate_prompt(self, data_point):
-        return f"""### User Input: 
-{data_point["input"]}
-
-### Response:\n{data_point["output"]}"""
-
 
     def get_history(self, row):
         row['history_item_title'] = eval(row['history_item_title'])
@@ -251,19 +259,11 @@ class D3Dataset(BaseDataset):
         }
 
 
-class EvalD3Dataset(BaseDataset):
+class EvalD3Dataset(CSVBaseDataset):
 
     def __init__(self, train_file, tokenizer, max_len=2048, sample=-1, test = False, seed=0, category="", K=4, dedup=False):
-        self.data = pd.read_csv(train_file)
-        random.seed(seed)
-        
-        if sample > 0:
-            self.data = self.data.sample(sample, random_state=seed)
-        self.tokenizer = Tokenizer(tokenizer)
-        self.test = test
-        self.max_len = max_len
-        self.category = category
-        self.dedup = dedup
+        super().__init__(train_file, sample, seed, max_len, category, dedup, tokenizer, test)
+
         self.instructs = [
         f"Given a list of {category} the user recetenly enjoy, please write a new {category} that the user may bought",
         f"Considering the {category} that has recently captured the user's interest, kindly create a compilation of other {category} that the user might have played prior to this.",
@@ -285,14 +285,6 @@ class EvalD3Dataset(BaseDataset):
 
 ### Response:\n{data_point["output"]}
 """
-    
-    def generate_prompt(self, data_point):
-        return f"""### User Input: 
-{data_point["input"]}
-
-### Response:\n{data_point["output"]}"""
-
-
     def get_history(self, row):
         row['history_item_title'] = eval(row['history_item_title'])
         L = len(row['history_item_title']) 
@@ -358,24 +350,14 @@ class EvalD3Dataset(BaseDataset):
             
         }
 
-class SidDataset(BaseDataset):
+
+class SidDataset(CSVBaseDataset):
     def __init__(self, train_file, max_len=2048, sample=-1, seed=0, category="", dedup=False):
-        self.data = pd.read_csv(train_file)
-        random.seed(seed)
-        
-        if sample > 0:
-            self.data = self.data.sample(sample, random_state=seed)
-        self.category = category
-        self.dedup = dedup
+        super().__init__(train_file, sample, seed, max_len, category, dedup, tokenizer=None, test=False)
+
         self.prompt2history = {}
         self.history2target = {}
         self.get_inputs()  
-
-    def generate_prompt(self, data_point):
-        return f"""### User Input: 
-{data_point["input"]}
-
-### Response:\n{data_point["output"]}"""
 
     def get_history(self, row):
         row['history_item_sid'] = eval(row['history_item_sid'])
@@ -412,25 +394,11 @@ class SidDataset(BaseDataset):
         }
 
 
-class SidSFTDataset(BaseDataset):
+class SidSFTDataset(CSVBaseDataset):
     def __init__(self, train_file, tokenizer, max_len=2048, sample=-1, test=False, seed=0, category="", K=4, dedup=False):
-        self.data = pd.read_csv(train_file)
-        random.seed(seed)
-        
-        if sample > 0:
-            self.data = self.data.sample(sample, random_state=seed)
-        self.tokenizer = Tokenizer(tokenizer)
-        self.test = test
-        self.max_len = max_len
-        self.category = category
-        self.dedup = dedup
+        super().__init__(train_file, sample, seed, max_len, category, dedup, tokenizer, test)
+
         self.get_inputs()
-
-    def generate_prompt(self, data_point):
-        return f"""### User Input: 
-{data_point["input"]}
-
-### Response:\n{data_point["output"]}"""
 
     def get_history(self, row):
         row['history_item_sid'] = eval(row['history_item_sid'])
@@ -498,19 +466,10 @@ Can you predict the next possible item that the user may expect?
         }
 
 
-class SidSFTDataset_GPR(BaseDataset):
+class SidSFTDataset_GPR(CSVBaseDataset):
     def __init__(self, train_file, tokenizer, max_len=2048, sample=-1, test=False, seed=0, category="", K=4, dedup=False):
-        self.data = pd.read_csv(train_file)
-        random.seed(seed)
-        
-        if sample > 0:
-            self.data = self.data.sample(sample, random_state=seed)
-        self.tokenizer = Tokenizer(tokenizer)
-        self.test = test
-        self.max_len = max_len
-        self.category = category
-        self.dedup = dedup
-        
+        super().__init__(train_file, sample, seed, max_len, category, dedup, tokenizer, test)
+
         # Try to load features from standard location
         try:
             with open(f'data/{category}/{category}.user.json', 'r') as f:
@@ -531,12 +490,6 @@ class SidSFTDataset_GPR(BaseDataset):
             self.item_features = {}
             
         self.get_inputs()  
-
-    def generate_prompt(self, data_point):
-        return f"""### User Input: 
-{data_point["input"]}
-
-### Response:\n{data_point["output"]}"""
 
     def get_history(self, row):
         row['history_item_sid'] = eval(row['history_item_sid'])
@@ -641,19 +594,11 @@ Can you predict the next possible item that the user may expect?
         }
 
 
-class EvalSidDataset(BaseDataset):
+class EvalSidDataset(CSVBaseDataset):
 
     def __init__(self, train_file, tokenizer, max_len=2048, sample=-1, test = False, seed=0, category="", K=4, dedup=False):
-        self.data = pd.read_csv(train_file)
-        random.seed(seed)
-        
-        if sample > 0:
-            self.data = self.data.sample(sample, random_state=seed)
-        self.tokenizer = Tokenizer(tokenizer)
-        self.test = test
-        self.max_len = max_len
-        self.category = category
-        self.dedup = dedup
+        super().__init__(train_file, sample, seed, max_len, category, dedup, tokenizer, test)
+
         self.get_inputs()  
 
     def generate_example_prompt(self, data_point):
@@ -662,12 +607,6 @@ class EvalSidDataset(BaseDataset):
 
 ### Response:\n{data_point["output"]}
 """
-    
-    def generate_prompt(self, data_point):
-        return f"""### User Input: 
-{data_point["input"]}
-
-### Response:\n{data_point["output"]}"""
 
     def get_history(self, row):
         row['history_item_sid'] = eval(row['history_item_sid'])
@@ -736,7 +675,7 @@ Can you predict the next possible item that the user may expect?
         }
 
 
-class SidItemFeatDataset(BaseDataset):
+class SidItemFeatDataset(JSONBaseDataset):
     def __init__(self, item_file, index_file, tokenizer=None, max_len=2048, sample=-1, test=False, seed=0, category=""):
         """
         Dataset for sid2title and title2sid tasks.
@@ -750,19 +689,8 @@ class SidItemFeatDataset(BaseDataset):
             test: Whether this is test mode
             seed: Random seed
             category: Category name for prompts
-        """
-        random.seed(seed)
-        
-        # Load item features and indices
-        with open(item_file, 'r') as f:
-            self.item_feat = json.load(f)
-        with open(index_file, 'r') as f:
-            self.indices = json.load(f)
-        
-        self.tokenizer = Tokenizer(tokenizer) if tokenizer is not None else None
-        self.test = test
-        self.max_len = max_len
-        self.category = category
+        """   
+        super().__init__(item_file, index_file, tokenizer, max_len, sample, test, category, dedup=False, seed=seed)
         
         # Build sid2title and title2sid mappings
         self.sid2title = {}
@@ -873,16 +801,9 @@ class RLTitle2SidDataset(BaseDataset):
             category: Category name for prompts
             dedup: Whether to filter duplicate items
         """
-        random.seed(seed)
+        super().__init__(item_file, index_file, tokenizer=None, max_len=1024, sample=sample, test=False, category=category, dedup=dedup, seed=seed)
+
         
-        # Load item features and indices
-        with open(item_file, 'r') as f:
-            self.item_feat = json.load(f)
-        with open(index_file, 'r') as f:
-            self.indices = json.load(f)
-        
-        self.category = category
-        self.dedup = dedup
         self.prompt2history = {}
         self.history2target = {}
         
@@ -966,7 +887,7 @@ class RLTitle2SidDataset(BaseDataset):
         }
 
 
-class RLSeqTitle2SidDataset(BaseDataset):
+class RLSeqTitle2SidDataset(CSVBaseDataset):
     def __init__(self, train_file, sample=-1, seed=0, category="", dedup=False):
         """
         RL-specific dataset for sequential recommendation using title sequences.
@@ -979,15 +900,8 @@ class RLSeqTitle2SidDataset(BaseDataset):
             category: Category name for prompts
             dedup: Whether to filter duplicate items
         """
-        random.seed(seed)
-        
-        # Load sequence data
-        self.data = pd.read_csv(train_file)
-        if sample > 0:
-            self.data = self.data.sample(sample, random_state=seed)
-        
-        self.category = category
-        self.dedup = dedup
+        super().__init__(train_file, sample, seed, max_len=1024, category=category, dedup=dedup, tokenizer=None, test=False)
+
         self.prompt2history = {}
         self.history2target = {}
         
@@ -1051,7 +965,8 @@ class RLSeqTitle2SidDataset(BaseDataset):
 
         }
 
-class RLSid2TitleDataset(BaseDataset):
+
+class RLSid2TitleDataset(JSONBaseDataset):
     def __init__(self, item_file, index_file, sample=-1, seed=0, category="", dedup=False):
         """
         RL-specific dataset for sid2title tasks.
@@ -1065,16 +980,8 @@ class RLSid2TitleDataset(BaseDataset):
             category: Category name for prompts
             dedup: Whether to filter duplicate items
         """
-        random.seed(seed)
-        
-        # Load item features and indices
-        with open(item_file, 'r') as f:
-            self.item_feat = json.load(f)
-        with open(index_file, 'r') as f:
-            self.indices = json.load(f)
-        
-        self.category = category
-        self.dedup = dedup
+        super().__init__(item_file, index_file, tokenizer=None, max_len=1024, sample=sample, test=False, category=category, dedup=dedup, seed=seed)
+
         self.prompt2history = {}
         self.history2target = {}
         
@@ -1129,7 +1036,7 @@ class RLSid2TitleDataset(BaseDataset):
         }
 
 
-class RLSidhis2TitleDataset(BaseDataset):
+class RLSidhis2TitleDataset(CSVBaseDataset, JSONBaseDataset):
     def __init__(self, train_file, item_file, index_file, sample=-1, seed=0, category="", dedup=False):
         """
         RL-specific dataset for sequential recommendation using semantic IDs in history and outputting item titles.
@@ -1144,21 +1051,10 @@ class RLSidhis2TitleDataset(BaseDataset):
             category: Category name for prompts
             dedup: Whether to filter duplicate items
         """
-        random.seed(seed)
-        
-        # Load sequence data
-        self.data = pd.read_csv(train_file)
-        if sample > 0:
-            self.data = self.data.sample(sample, random_state=seed)
-        
-        # Load item features and indices
-        with open(item_file, 'r') as f:
-            self.item_feat = json.load(f)
-        with open(index_file, 'r') as f:
-            self.indices = json.load(f)
-        
-        self.category = category
-        self.dedup = dedup
+        CSVBaseDataset.__init__(self, train_file, sample, seed, max_len=1024, category=category, dedup=dedup)
+        JSONBaseDataset.__init__(self, item_file, index_file, tokenizer=None, max_len=1024, sample=sample, test=False, category=category, dedup=dedup, seed=seed)
+
+
         self.prompt2history = {}
         self.history2target = {}
         
@@ -1168,12 +1064,6 @@ class RLSidhis2TitleDataset(BaseDataset):
             self.id2title[item_id] = features['title']
         
         self.get_inputs()
-    
-    def generate_prompt(self, data_point):
-        return f"""### User Input: 
-{data_point["input"]}
-
-### Response:\n{data_point["output"]}"""
 
     def get_history(self, row):
         row['history_item_sid'] = eval(row['history_item_sid'])
@@ -1224,7 +1114,7 @@ class RLSidhis2TitleDataset(BaseDataset):
         }
 
 
-class FusionSeqRecDataset(BaseDataset):
+class FusionSeqRecDataset(CSVBaseDataset, JSONBaseDataset):
     def __init__(self, train_file, item_file, index_file, tokenizer, max_len=2048, sample=-1, test=False, seed=0, category="", dedup=False):
         """
         Fusion dataset combining sequence recommendation with item features.
@@ -1242,24 +1132,9 @@ class FusionSeqRecDataset(BaseDataset):
             category: Category name for prompts
             dedup: Whether to filter duplicate items
         """
-        random.seed(seed)
-        
-        # Load sequence data
-        self.data = pd.read_csv(train_file)
-        if sample > 0:
-            self.data = self.data.sample(sample, random_state=seed)
-        
-        # Load item features and indices
-        with open(item_file, 'r') as f:
-            self.item_feat = json.load(f)
-        with open(index_file, 'r') as f:
-            self.indices = json.load(f)
-        
-        self.tokenizer = Tokenizer(tokenizer)
-        self.test = test
-        self.max_len = max_len
-        self.category = category
-        self.dedup = dedup
+        CSVBaseDataset.__init__(self, train_file, sample, seed, max_len, category, dedup)
+        JSONBaseDataset.__init__(self, item_file, index_file, tokenizer, max_len, sample, test, category, dedup=False, seed=seed)
+
         
         # Build sid2title and sid2description mappings
         self.sid2title = {}
@@ -1436,7 +1311,7 @@ Can you recommend the next item for the user based on their interaction history?
         }
 
 
-class TitleHistory2SidSFTDataset(BaseDataset):
+class TitleHistory2SidSFTDataset(CSVBaseDataset, JSONBaseDataset):
     def __init__(self, train_file, item_file, index_file, tokenizer, max_len=2048, sample=-1, test=False, seed=0, category="", dedup=False):
         """
         SFT dataset that uses item titles in user history to predict next item's semantic ID.
@@ -1453,24 +1328,9 @@ class TitleHistory2SidSFTDataset(BaseDataset):
             category: Category name for prompts
             dedup: Whether to filter duplicate items
         """
-        random.seed(seed)
-        
-        # Load sequence data
-        self.data = pd.read_csv(train_file)
-        if sample > 0:
-            self.data = self.data.sample(sample, random_state=seed)
-        
-        # Load item features and indices
-        with open(item_file, 'r') as f:
-            self.item_feat = json.load(f)
-        with open(index_file, 'r') as f:
-            self.indices = json.load(f)
-        
-        self.tokenizer = Tokenizer(tokenizer)
-        self.test = test
-        self.max_len = max_len
-        self.category = category
-        self.dedup = dedup
+        CSVBaseDataset.__init__(self, train_file, sample, seed, max_len, category, dedup, tokenizer, test)
+        JSONBaseDataset.__init__(self, item_file, index_file, tokenizer, max_len, sample, test, category, dedup=False, seed=seed)
+
         
         # Build item_id to semantic ID mapping
         self.id2sid = {}
@@ -1480,12 +1340,6 @@ class TitleHistory2SidSFTDataset(BaseDataset):
                 self.id2sid[item_id] = combined_sid
         
         self.get_inputs()
-    
-    def generate_prompt(self, data_point):
-        return f"""### User Input: 
-{data_point["input"]}
-
-### Response:\n{data_point["output"]}"""
     
     def get_history(self, row):
         """Extract user history from title sequence and target semantic ID"""
@@ -1580,8 +1434,7 @@ class PreferenceSFTDataset(BaseDataset):
             category: Category name for prompts
             dedup: Whether to filter duplicate items
         """
-        random.seed(seed)
-        
+        super().__init__(tokenizer, max_len, test, category, dedup, seed)
         # Load user preferences - handle both JSON and JSONL formats
         with open(user_preference_file, 'r') as f:
             try:
@@ -1619,12 +1472,6 @@ class PreferenceSFTDataset(BaseDataset):
         # Load index mapping
         with open(index_file, 'r') as f:
             self.indices = json.load(f)
-        
-        self.tokenizer = Tokenizer(tokenizer)
-        self.test = test
-        self.max_len = max_len
-        self.category = category
-        self.dedup = dedup
         
         # Find users with preferences and prepare data
         self.matched_data = self._prepare_preference_data()
@@ -1680,7 +1527,7 @@ class PreferenceSFTDataset(BaseDataset):
         
         return semantic_ids
     
-    def get_history_and_preference(self, row_data):
+    def get_history(self, row_data):
         """Extract and format user history and preference"""
         # Get input history item IDs (all but last item) and convert to semantic IDs
         input_history_ids = row_data['input_history']
@@ -1707,12 +1554,6 @@ class PreferenceSFTDataset(BaseDataset):
         # print(result)
         return result
     
-    def generate_prompt(self, data_point):
-        return f"""### User Input: 
-{data_point["input"]}
-
-### Response:\n{data_point["output"]}"""
-    
     def pre(self, idx):
         instruction = """Below is an instruction that describes a task, paired with an input that provides further context. Write a response that appropriately completes the request. 
 
@@ -1723,7 +1564,7 @@ Analyze the user's interaction history, provide insights about their preferences
         tokens = self.tokenizer.encode(instruction, bos=True, eos=False)
         
         row_data = self.matched_data[idx]
-        history_and_pref = self.get_history_and_preference(row_data)
+        history_and_pref = self.get_history(row_data)
         
         # Skip empty histories or missing targets
         if not history_and_pref['history_semantic_ids'] or not history_and_pref['target_sid']:
@@ -1775,8 +1616,8 @@ class UserPreference2sidSFTDataset(BaseDataset):
             category: Category name for prompts
             dedup: Whether to filter duplicate items
         """
-        random.seed(seed)
-        
+        super().__init__(tokenizer, max_len, test, category, dedup, seed)
+
         # Load user preferences - handle both JSON and JSONL formats
         with open(user_preference_file, 'r') as f:
             try:
@@ -1814,12 +1655,6 @@ class UserPreference2sidSFTDataset(BaseDataset):
         # Load index mapping
         with open(index_file, 'r') as f:
             self.indices = json.load(f)
-        
-        self.tokenizer = Tokenizer(tokenizer)
-        self.test = test
-        self.max_len = max_len
-        self.category = category
-        self.dedup = dedup
         
         # Prepare training data from preference file interaction histories
         self.matched_data = self._prepare_sequence_data()
@@ -1899,12 +1734,6 @@ class UserPreference2sidSFTDataset(BaseDataset):
             "user_preference": user_preference,
             "target_sid": target_sid
         }
-    
-    def generate_prompt(self, data_point):
-        return f"""### User Input: 
-{data_point["input"]}
-
-### Response:\n{data_point["output"]}"""
     
     def pre(self, idx):
         instruction = """Below is an instruction that describes a task, paired with an input that provides further context. Write a response that appropriately completes the request. 

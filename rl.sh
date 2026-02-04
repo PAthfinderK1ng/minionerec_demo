@@ -9,11 +9,11 @@ for category in "Industrial_and_Scientific"; do
 
     HF_ENDPOINT=https://hf-mirror.com accelerate launch \
                                     --config_file ./config/zero2_opt.yaml \
-                                    --num_processes 8 --main_process_port 29503 \
+                                    --num_processes 1 --main_process_port 29503 \
                                     rl.py \
-                        --model_path path_to_model \
-                        --train_batch_size 64 \
-                        --eval_batch_size 128 \
+                        --model_path ./output/sft_industrial \
+                        --train_batch_size 4 \
+                        --eval_batch_size 8 \
                         --num_train_epochs 2 \
                         --gradient_accumulation_steps 2 \
                         --train_file ${train_file} \
@@ -34,8 +34,8 @@ for category in "Industrial_and_Scientific"; do
                         --add_gt False \
                         --beta 1e-3 \
                         --dapo False \
-                        --output_dir output_dir \
-                        --wandb_run_name wandb_name \
+                        --output_dir ./output/rl_industrial \
+                        --wandb_run_name rl_industrial \
                         --sid_index_path ./data/Amazon/index/Industrial_and_Scientific.index.json \
                         --item_meta_path ./data/Amazon/index/Industrial_and_Scientific.item.json
 done

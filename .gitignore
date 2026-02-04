@@ -1,0 +1,6 @@
+__pycache__/
+wandb/
+.conda/
+miniconda.sh
+*.pyc
+.DS_Store

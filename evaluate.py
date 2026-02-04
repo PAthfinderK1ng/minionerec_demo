@@ -194,7 +194,7 @@ def main(
                 generation_config=generation_config,
                 return_dict_in_generate=True,
                 output_scores=True,
-                logits_processor=logits_processor,
+                # logits_processor=logits_processor,
             )
        
         batched_completions = generation_output.sequences[:, maxLen:]

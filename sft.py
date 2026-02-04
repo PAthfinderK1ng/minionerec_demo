@@ -115,7 +115,7 @@ def train(
     item_meta_path: str = "",
 ):
     set_seed(seed)
-    os.environ['WANDB_PROJECT'] = wandb_project
+    # (disabled) os.environ['WANDB_PROJECT'] = wandb_project
     category_dict = {"Industrial_and_Scientific": "industrial and scientific items", "Office_Products": "office products", "Toys_and_Games": "toys and games", "Sports": "sports and outdoors", "Books": "books"}
     print(category)
     category = category_dict[category]
@@ -230,7 +230,6 @@ def train(
         eval_dataset=hf_val_dataset,
         args=transformers.TrainingArguments(
             # deepspeed=deepspeed,
-            run_name=wandb_run_name,
             per_device_train_batch_size=micro_batch_size,
             per_device_eval_batch_size=micro_batch_size,
             gradient_accumulation_steps=gradient_accumulation_steps,
@@ -249,7 +248,7 @@ def train(
             load_best_model_at_end=True,
             ddp_find_unused_parameters=False if ddp else None,
             group_by_length=group_by_length,
-            report_to="wandb",
+            report_to="none",
         ),
         data_collator=transformers.DataCollatorForSeq2Seq(
             tokenizer, pad_to_multiple_of=8, return_tensors="pt", padding=True

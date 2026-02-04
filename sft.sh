@@ -14,9 +14,9 @@ for category in "Industrial_and_Scientific"; do
             --micro_batch_size 4 \
             --train_file ${train_file} \
             --eval_file ${eval_file} \
-            --output_dir ./output/sft_industrial \
-            --wandb_project minionerec \
-            --wandb_run_name sft_industrial \
+            --output_dir /scratch/kl212/minionerec_out/sft_industrial \
+            \
+            \
             --category ${category} \
             --train_from_scratch False \
             --seed 42 \

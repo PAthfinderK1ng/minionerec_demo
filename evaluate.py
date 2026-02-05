@@ -1,5 +1,6 @@
 
 import pandas as pd
+import re
 import fire
 import torch
 import json
@@ -206,6 +207,7 @@ def main(
             output = tokenizer.batch_decode(batched_completions, skip_special_tokens=True)
             
         output = [_.split("Response:\n")[-1].strip() for _ in output]
+        output = ["".join(re.findall(r"<[^>]+>", s)) for s in output]
         real_outputs = [output[i * num_beams: (i + 1) * num_beams] for i in range(len(output) // num_beams)]
         return real_outputs
     

@@ -45,9 +45,9 @@ do
                 --category ${category} \
                 --test_data_path "$temp_dir/${i}.csv" \
                 --result_json_data "$temp_dir/${i}.json" \
-                --batch_size 1 \
-                --num_beams 50 \
-                --max_new_tokens 256 \
+                --batch_size 2 \
+                --num_beams 20 \
+                --max_new_tokens 128 \
                 --temperature 1.0 \
                 --guidance_scale 1.0 \
                 --length_penalty 0.0 &

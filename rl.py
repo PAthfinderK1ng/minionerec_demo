@@ -48,7 +48,7 @@ def train(
     temperature: float = 1.0,
     add_gt: bool = False,
     eval_step: float = 0.199,
-    num_generations: int = 16,
+    num_generations: int = 8,
     num_train_epochs: int = 1,
     learning_rate: float = 1e-6,
     beta: float = 0.04,

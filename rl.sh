@@ -23,7 +23,7 @@ for category in "Industrial_and_Scientific"; do
                         --sample_train False \
                         --eval_step 0.0999 \
                         --reward_type ranking \
-                        --num_generations 16 \
+                        --num_generations 8 \
                         --mask_all_zero False \
                         --dynamic_sampling False \
                         --sync_ref_model True \

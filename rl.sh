@@ -11,7 +11,7 @@ for category in "Industrial_and_Scientific"; do
                                     --config_file ./config/zero2_opt.yaml \
                                     --num_processes 1 --main_process_port 29503 \
                                     rl.py \
-                        --model_path ./final_checkpoint \
+                        --model_path /scratch/kl212/minionerec_out/sft_industrial/final_checkpoint \
                         --train_batch_size 4 \
                         --eval_batch_size 8 \
                         --num_train_epochs 2 \
